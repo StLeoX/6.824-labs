@@ -64,7 +64,7 @@ type reqMsg struct {
 	svcMeth  string      // e.g. "Raft.AppendEntries"
 	argsType reflect.Type
 	args     []byte
-	replyCh  chan replyMsg
+	replyCh  chan replyMsg // channel consisted of replyMsg
 }
 
 type replyMsg struct {
@@ -78,7 +78,7 @@ type ClientEnd struct {
 	done    chan struct{} // closed when Network is cleaned up
 }
 
-// send an RPC, wait for the reply.
+// Call client send an RPC, wait for the server to reply.
 // the return value indicates success; false means that
 // no reply was received from the server.
 func (e *ClientEnd) Call(svcMeth string, args interface{}, reply interface{}) bool {
@@ -128,13 +128,13 @@ type Network struct {
 	longDelays     bool                        // pause a long time on send on disabled connection
 	longReordering bool                        // sometimes delay replies a long time
 	ends           map[interface{}]*ClientEnd  // ends, by name
-	enabled        map[interface{}]bool        // by end name
+	enabled        map[interface{}]bool        // by endname
 	servers        map[interface{}]*Server     // servers, by name
 	connections    map[interface{}]interface{} // endname -> servername
 	endCh          chan reqMsg
 	done           chan struct{} // closed when Network is cleaned up
 	count          int32         // total RPC count, for statistics
-	bytes          int64         // total bytes send, for statistics
+	nbytes         int64         // total nbytes send, for statistics
 }
 
 func MakeNetwork() *Network {
@@ -143,7 +143,7 @@ func MakeNetwork() *Network {
 	rn.ends = map[interface{}]*ClientEnd{}
 	rn.enabled = map[interface{}]bool{}
 	rn.servers = map[interface{}]*Server{}
-	rn.connections = map[interface{}](interface{}){}
+	rn.connections = map[interface{}]interface{}{}
 	rn.endCh = make(chan reqMsg)
 	rn.done = make(chan struct{})
 
@@ -153,7 +153,7 @@ func MakeNetwork() *Network {
 			select {
 			case xreq := <-rn.endCh:
 				atomic.AddInt32(&rn.count, 1)
-				atomic.AddInt64(&rn.bytes, int64(len(xreq.args)))
+				atomic.AddInt64(&rn.nbytes, int64(len(xreq.args)))
 				go rn.processReq(xreq)
 			case <-rn.done:
 				return
@@ -282,11 +282,11 @@ func (rn *Network) processReq(req reqMsg) {
 			// the number of goroutines, so that the race
 			// detector is less likely to get upset.
 			time.AfterFunc(time.Duration(ms)*time.Millisecond, func() {
-				atomic.AddInt64(&rn.bytes, int64(len(reply.reply)))
+				atomic.AddInt64(&rn.nbytes, int64(len(reply.reply)))
 				req.replyCh <- reply
 			})
 		} else {
-			atomic.AddInt64(&rn.bytes, int64(len(reply.reply)))
+			atomic.AddInt64(&rn.nbytes, int64(len(reply.reply)))
 			req.replyCh <- reply
 		}
 	} else {
@@ -375,7 +375,7 @@ func (rn *Network) GetTotalCount() int {
 }
 
 func (rn *Network) GetTotalBytes() int64 {
-	x := atomic.LoadInt64(&rn.bytes)
+	x := atomic.LoadInt64(&rn.nbytes)
 	return x
 }
 
@@ -435,6 +435,7 @@ func (rs *Server) GetCount() int {
 	return rs.count
 }
 
+// Service : an abstract of method to invoke.
 // an object with methods that can be called via RPC.
 // a single server may have more than one Service.
 type Service struct {
@@ -444,6 +445,7 @@ type Service struct {
 	methods map[string]reflect.Method
 }
 
+// MakeService : register a known method.
 func MakeService(rcvr interface{}) *Service {
 	svc := &Service{}
 	svc.typ = reflect.TypeOf(rcvr)
@@ -456,6 +458,7 @@ func MakeService(rcvr interface{}) *Service {
 		mtype := method.Type
 		mname := method.Name
 
+		// log
 		//fmt.Printf("%v pp %v ni %v 1k %v 2k %v no %v\n",
 		//	mname, method.PkgPath, mtype.NumIn(), mtype.In(1).Kind(), mtype.In(2).Kind(), mtype.NumOut())
 

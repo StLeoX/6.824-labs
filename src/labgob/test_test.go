@@ -119,7 +119,7 @@ type T4 struct {
 func TestCapital(t *testing.T) {
 	e0 := errorCount
 
-	v := []map[*T4]int{}
+	var v []map[*T4]int
 
 	w := new(bytes.Buffer)
 	e := NewEncoder(w)

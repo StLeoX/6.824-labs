@@ -41,7 +41,7 @@ func (js *JunkServer) Handler3(args int, reply *int) {
 	*reply = -args
 }
 
-// args is a pointer
+// args is a ptr, reply is a ptr.
 func (js *JunkServer) Handler4(args *JunkArgs, reply *JunkReply) {
 	reply.X = "pointer"
 }

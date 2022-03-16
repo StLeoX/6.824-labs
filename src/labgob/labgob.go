@@ -16,7 +16,7 @@ import "unicode"
 import "unicode/utf8"
 
 var mu sync.Mutex
-var errorCount int // for TestCapital
+var errorCount int // for TestCapital, global counter
 var checked map[reflect.Type]bool
 
 type LabEncoder struct {
@@ -69,6 +69,7 @@ func checkValue(value interface{}) {
 	checkType(reflect.TypeOf(value))
 }
 
+// recursively decline
 func checkType(t reflect.Type) {
 	k := t.Kind()
 
